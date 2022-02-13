@@ -3,6 +3,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Text documents
+
+*.txt
+*.tsv
+*.tsv#
+*.zip
+*.pdf
+*.png
+*.ods
+
 # C extensions
 *.so
 
