@@ -3,24 +3,26 @@ import numpy as np
 from re import L, S
 from nltk.corpus import stopwords 
 import emoji
-from nltk.util import ngrams, everygrams
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
 
 class TrainingData():
 	"""data and tags used for trainig"""
 	def __init__(self, data, tags):
 		super(TrainingData, self).__init__()
 		self.Data = data
-		self.Tags = tags
+		self.Labels = tags
+		self.Size = len(data)
 	
 	def GetPair(self, i):
-		return self.Data[1], self.Tags[i]
+		return self.Data[1], self.Labels[i]
 
 class DataSetManager():
 	"""Reads and prepare raw data from csv files for training"""
 	def __init__(self, path,n):
 		super(DataSetManager, self).__init__()
 		self.CsvPath = path
-		self.NGramMax = n
+		self.TestSplit = n
 		self._init()
 
 	def _init(self):
@@ -58,10 +60,10 @@ class DataSetManager():
 			self.TrainingData.Data[iter] = ' '.join([valid for valid in words if valid not in toRemove ])
 			iter = iter+1
 
-	def GetEveryGram(self):
-		self.EveryGrams = list()
-		for i in range(len(self.TrainingData.Data)):
-			line, tag = self.TrainingData.GetPair(i)
-			everyGrams = list(everygrams(line,self.NGramMax))
-			self.EveryGrams.append(TrainingData(everyGrams),tag*np.ones(len(everyGrams)))
-				 
+	def GetTrainingData(self):
+		textTrain = self.TrainingData.Data[0:(int)(self.TestSplit*self.TrainingData.Size)]
+		labelTrain = self.TrainingData.Labels[0:(int)(self.TestSplit*self.TrainingData.Size)]	
+		return train_test_split(textTrain,labelTrain,test_size=0.23)
+
+	def GetTestingData(self):
+		return self.TrainingData.Data[(int)(self.TestSplit*self.TrainingData.Size):], self.TrainingData.Labels[(int)(self.TestSplit*self.TrainingData.Size):]	
