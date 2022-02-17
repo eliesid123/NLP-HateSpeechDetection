@@ -27,8 +27,11 @@ class DataSetManager():
 
 	def _init(self):
 		self.GetRawData()
+
+		#training data will have no symbols at all. words containing unvalid symbols are removed, and valid symbols are removed while keeping the word
 		self._validSymbols = dict.fromkeys(map(ord, "!?\.,"), None)
 		self._unvalidSymbols = dict.fromkeys(map(ord, "@#$%^&*<>/][}{"), None)
+		#stopwords are words irrelevant to the meaning of the sentence (I,for,where...) , and needs to be removed to have better results
 		self._stopWords = list(stopwords.words('english'))
 
 	def GetRawData(self):
@@ -37,6 +40,7 @@ class DataSetManager():
 			next(rawData)
 			data = list()
 			tags = list()
+			#create binary tags (0 1) based on the csv dataset
 			for row in rawData:
 				data.append(row[1])
 				if row[2]=='OFF':
@@ -49,17 +53,22 @@ class DataSetManager():
 	def CleanData(self):
 		iter = 0
 		for line in self.TrainingData.Data:
+			#remove valid symbols from sentences
 			line = line.translate(self._validSymbols)
 			words = line.split(' ')
 			toRemove = list()
 			for word in words:
+				#remove unvalid symbols and emojis from the word then check if the word changes
 				newWord = word.translate(self._unvalidSymbols)
 				newWord = emoji.demojize(newWord) 
+				#remove word if it is changed, 1 character, or is a stopword
 				if newWord != word or word == "URL" or len(word)<=1 or self._stopWords.count(word) >0:
 					toRemove.append(word)
+			#reconstruct the sentence using only the useful words
 			self.TrainingData.Data[iter] = ' '.join([valid for valid in words if valid not in toRemove ])
 			iter = iter+1
 
+	#take a portion of data for training and leave the rest for testing
 	def GetTrainingData(self):
 		textTrain = self.TrainingData.Data[0:(int)(self.TestSplit*self.TrainingData.Size)]
 		labelTrain = self.TrainingData.Labels[0:(int)(self.TestSplit*self.TrainingData.Size)]	

@@ -5,6 +5,8 @@ from dataManagement import DataSetManager
 import os
 import tokenize
 
+from modelBuilder import ModelBuilder
+
 def Tokenize(sentence):
     return tokenize.tokenize(sentence)
 
@@ -16,7 +18,9 @@ def main():
 	reader.CleanData()
 	trainTexts, valTexts, trainLabels, valLabels = reader.GetTrainingData()
 	testData, testLabels = reader.GetTestingData()
-	tokens = Tokenize(trainTexts[1])
-	print(tokens)
+	model = ModelBuilder()
+	model.Compile()
+	results = model.Train(trainTexts,trainLabels,valTexts,valLabels)
+	print(results)
 if __name__ == "__main__":
 	main()
