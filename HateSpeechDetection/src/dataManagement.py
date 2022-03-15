@@ -1,9 +1,7 @@
 import csv
-import numpy as np 
-from re import L, S
+from curses import noecho
 from nltk.corpus import stopwords 
 import emoji
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 class TrainingData():
@@ -19,10 +17,11 @@ class TrainingData():
 
 class DataSetManager():
 	"""Reads and prepare raw data from csv files for training"""
-	def __init__(self, path,n):
+	def __init__(self, path,n=0.8,csvFile = None):
 		super(DataSetManager, self).__init__()
 		self.CsvPath = path
 		self.TestSplit = n
+		self.CsvFile = csvFile
 		self._init()
 
 	def _init(self):
@@ -35,7 +34,9 @@ class DataSetManager():
 		self._stopWords = list(stopwords.words('english'))
 
 	def GetRawData(self):
-		with open(self.CsvPath,newline='',encoding='utf-8') as csvFile:
+		if self.CsvFile == None:
+			self.CsvFile = open(self.CsvPath,newline='',encoding='utf-8')
+		with self.CsvFile as csvFile:
 			rawData =  csv.reader(csvFile,delimiter='\t')
 			next(rawData)
 			data = list()

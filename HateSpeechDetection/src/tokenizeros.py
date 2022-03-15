@@ -21,7 +21,7 @@ class Tokenizor():
               line,
               add_special_tokens=True,
               max_length=self.MaxLen,
-              pad_to_max_length=True,
+              padding = "longest",
               return_attention_mask=True,
             )
         return encoded
