@@ -1,8 +1,7 @@
 import csv
-from curses import noecho
 from nltk.corpus import stopwords 
 import emoji
-from sklearn.model_selection import train_test_split
+import numpy as np
 
 class TrainingData():
 	"""data and tags used for trainig"""
@@ -10,23 +9,32 @@ class TrainingData():
 		super(TrainingData, self).__init__()
 		self.Data = data
 		self.Labels = tags
-		self.Size = len(data)
+		self._ini()
+
+	def _ini(self):
+		self.Size = len(self.Data)
+		self.MaxLength = 0
+		for line in self.Data:
+			self.MaxLength = max(self.MaxLength,len(line))
 	
 	def GetPair(self, i):
 		return self.Data[1], self.Labels[i]
 
 class DataSetManager():
 	"""Reads and prepare raw data from csv files for training"""
-	def __init__(self, path,n=0.8,csvFile = None):
+	def __init__(self, path,tokenizor,n=0.8,csvFile = None):
 		super(DataSetManager, self).__init__()
 		self.CsvPath = path
 		self.TestSplit = n
 		self.CsvFile = csvFile
+		self.Tokenizor = tokenizor
+		self.VocabSize = self.Tokenizor.Index
 		self._init()
 
 	def _init(self):
 		self.GetRawData()
-
+		self.MaxLength = self.TrainingData.MaxLength
+		self.DatasetSize = self.TrainingData.Size
 		#training data will have no symbols at all. words containing unvalid symbols are removed, and valid symbols are removed while keeping the word
 		self._validSymbols = dict.fromkeys(map(ord, "!?\.,"), None)
 		self._unvalidSymbols = dict.fromkeys(map(ord, "@#$%^&*<>/][}{"), None)
@@ -69,11 +77,12 @@ class DataSetManager():
 			self.TrainingData.Data[iter] = ' '.join([valid for valid in words if valid not in toRemove ])
 			iter = iter+1
 
+	def TokenizeData(self):
+		self.Tokenizor.Encode(self.TrainingData.Data)
+		self.VocabSize = self.Tokenizor.Index
 	#take a portion of data for training and leave the rest for testing
 	def GetTrainingData(self):
-		textTrain = self.TrainingData.Data[0:(int)(self.TestSplit*self.TrainingData.Size)]
-		labelTrain = self.TrainingData.Labels[0:(int)(self.TestSplit*self.TrainingData.Size)]	
-		return train_test_split(textTrain,labelTrain,test_size=0.23)
+		return self.Tokenizor.Encode(self.TrainingData.Data[0:(int)(self.TestSplit*self.TrainingData.Size)]), np.array(self.TrainingData.Labels[0:(int)(self.TestSplit*self.TrainingData.Size)])	
 
-	def GetTestingData(self):
-		return self.TrainingData.Data[(int)(self.TestSplit*self.TrainingData.Size):], self.TrainingData.Labels[(int)(self.TestSplit*self.TrainingData.Size):]	
+	def GetValidationData(self):
+		return self.Tokenizor.Encode(self.TrainingData.Data[(int)(self.TestSplit*self.TrainingData.Size):]), np.array(self.TrainingData.Labels[(int)(self.TestSplit*self.TrainingData.Size):])	

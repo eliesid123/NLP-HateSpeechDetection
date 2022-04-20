@@ -1,21 +1,23 @@
+import imp
 import torch
-from transformers import AlbertModel
 from tensorflow.keras.optimizers import Adam
-import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import Conv1D
+from tensorflow.keras.layers import MaxPooling1D
+from tensorflow.keras.layers  import Embedding
+from tensorflow.keras.preprocessing import sequence
 
-class ModelBuilder:
-    '''build, compile and train the model according to the given parameters'''
+class CnnModel:
     def __init__(self,
-                 tokenizer,
+                 dataManager,
                  dropout=0.5,
                  learningRate=0.01,
-                 batchSize = 8,
+                 batchSize = 4,
                  epochs = 5,
                  validationSplit = 0.2,
                 ):
-        if tokenizer == None:
-            print("Tokrnizer is None")
-            return
         #ratio of nodes turned off during training
         if dropout >1:
             print("Dropout can' be greater than 1, set to 0.5")
@@ -46,10 +48,8 @@ class ModelBuilder:
             self.BatchSize = 8
         else:
             self.BatchSize = epochs
-        self.Tokenizer = tokenizer
-        self.InputSize = tokenizer.MaxLen    
         ##ALBERT is a pretrained model for NLP tasks
-        self.AlbertModel = AlbertModel.from_pretrained('albert-xxlarge-v2')
+        self.DataManager = dataManager
         self.IsCompiled = False
         self.Model = None
         self.ModelSummary = None
@@ -57,18 +57,12 @@ class ModelBuilder:
     def Create(self, PRINT = False):
         #the output of Albert model is passed through a decision tree (dense layers) to determine hate speech. Dropout to avoid overfitting
         
-        output = self.GetAlbertOutput("sample text")
-        inputLayer = tf.keras.Input(shape = output.shape)
-        output = tf.keras.layers.Dense(128,activation='relu')(inputLayer)
-        output = tf.keras.layers.Dropout(self.Dropout)(output)
-        output = tf.keras.layers.Dense(64,activation='relu')(output)
-        output = tf.keras.layers.Dropout(self.Dropout)(output)
-        output = tf.keras.layers.Dense(32,activation='relu')(output)
-        output = tf.keras.layers.Dropout(self.Dropout)(output)
-        output = tf.keras.layers.Dense(1,activation='sigmoid')(output)
-  
-        model = tf.keras.models.Model(inputs = inputLayer ,outputs = output)
- 
+        model = Sequential()
+        model.add(Embedding(self.DataManager.VocabSize+1, 32, input_length=self.DataManager.MaxLength))
+        model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu'))
+        model.add(MaxPooling1D(pool_size=2))
+        model.add(LSTM(100))
+        model.add(Dense(1, activation='sigmoid'))
         self.Model = model
         self.ModelSummary = model.summary()
         if PRINT:
@@ -79,24 +73,12 @@ class ModelBuilder:
             self.Model.compile(Adam(lr=self.LearningRate), loss='binary_crossentropy', metrics=['accuracy'])
             self.IsCompiled = True
 
-    def GetAlbertOutput(self,line):
-        encoded = self.Tokenizer.EncodeSentece(line)
-        input_ids = torch.tensor(encoded['input_ids']).unsqueeze(0)
-        attention_mask = torch.tensor(encoded['attention_mask']).unsqueeze(0)
-        output = self.AlbertModel(input_ids,attention_mask)
-        return output[0]
+    def Train(self,trainX,trainY,testX,testY):
+        trainX = sequence.pad_sequences(trainX, maxlen=self.DataManager.MaxLength,dtype="int64")
+        testX = sequence.pad_sequences(testX, maxlen=self.DataManager.MaxLength,dtype="int64")
+        history = self.Model.fit(trainX, trainY, epochs=self.Epochs, batch_size=self.BatchSize)
+        # Final evaluation of the model
+        scores = self.Model.evaluate(testX, testY, verbose=0)
+        print("Accuracy: %.2f%%" % (scores[1]*100))
+        return history
 
-    def Train(self,trainX,trainY):
-        if  self.IsCompiled:
-            output = []
-            for i in range(200):
-                output.append(self.GetAlbertOutput(trainX[i]))
-            history = self.Model.fit(
-                                    x = output,
-                                    y = trainY,
-                                    validation_split=self.ValidationSplit,
-                                    batch_size=self.BatchSize, 
-                                    epochs=self.Epochs)
-            return history
-
-        return None
