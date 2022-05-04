@@ -77,12 +77,9 @@ class DataSetManager():
 			self.TrainingData.Data[iter] = ' '.join([valid for valid in words if valid not in toRemove ])
 			iter = iter+1
 
-	def TokenizeData(self):
-		self.Tokenizor.Encode(self.TrainingData.Data)
-		self.VocabSize = self.Tokenizor.Index
 	#take a portion of data for training and leave the rest for testing
 	def GetTrainingData(self):
-		return self.Tokenizor.Encode(self.TrainingData.Data[0:(int)(self.TestSplit*self.TrainingData.Size)]), np.array(self.TrainingData.Labels[0:(int)(self.TestSplit*self.TrainingData.Size)])	
+		return self.TrainingData.Data[0:(int)(self.TestSplit*self.TrainingData.Size)], np.array(self.TrainingData.Labels[0:(int)(self.TestSplit*self.TrainingData.Size)])	
 
 	def GetValidationData(self):
-		return self.Tokenizor.Encode(self.TrainingData.Data[(int)(self.TestSplit*self.TrainingData.Size):]), np.array(self.TrainingData.Labels[(int)(self.TestSplit*self.TrainingData.Size):])	
+		return self.TrainingData.Data[(int)(self.TestSplit*self.TrainingData.Size):], np.array(self.TrainingData.Labels[(int)(self.TestSplit*self.TrainingData.Size):])	

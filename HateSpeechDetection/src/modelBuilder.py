@@ -1,22 +1,28 @@
-import imp
-import torch
+import json
+from tensorflow.keras.models import model_from_json
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import concatenate
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import Conv1D
+from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import MaxPooling1D
 from tensorflow.keras.layers  import Embedding
-from tensorflow.keras.preprocessing import sequence
+from tensorflow.keras.preprocessing.text import Tokenizer  
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 class CnnModel:
     def __init__(self,
-                 dataManager,
+                 tokenizer = None,
+                 maxLength = 580,
+                 vocabSize = 50000,
                  dropout=0.5,
                  learningRate=0.01,
                  batchSize = 4,
                  epochs = 5,
-                 validationSplit = 0.2,
+                 validationSplit = 0.2
                 ):
         #ratio of nodes turned off during training
         if dropout >1:
@@ -48,25 +54,62 @@ class CnnModel:
             self.BatchSize = 8
         else:
             self.BatchSize = epochs
-        ##ALBERT is a pretrained model for NLP tasks
-        self.DataManager = dataManager
+        self.MaxLength = maxLength
+        self.VocabSize = vocabSize
         self.IsCompiled = False
         self.Model = None
         self.ModelSummary = None
 
+        ################# DO NOT TOUCH #################
+        self._modelJSONFile = ""
+        self._modelWeightsFile = ""
+        self._modelTokenizor = ""
+        ################################################
+
     def Create(self, PRINT = False):
-        #the output of Albert model is passed through a decision tree (dense layers) to determine hate speech. Dropout to avoid overfitting
-        
+        # firstChannel = Sequential()
+        # firstChannel.add(Embedding(self.VocabSize, 64, input_length=self.MaxLength))
+        # firstChannel.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
+        # firstChannel.add(Dropout(0.3))
+        # firstChannel.add(MaxPooling1D(pool_size=2))
+        # firstChannel.add(LSTM(128))
+        # firstChannel.add(Flatten())
+        # secondChannel = Sequential()
+        # secondChannel.add(Embedding(self.VocabSize, 64, input_length=self.MaxLength))
+        # secondChannel.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
+        # secondChannel.add(Dropout(0.3))
+        # secondChannel.add(MaxPooling1D(pool_size=2))
+        # secondChannel.add(LSTM(128))
+        # secondChannel.add(Flatten())
+        # merged = concatenate([firstChannel,secondChannel])
+        # model.add(merged)
+        self.Tokenizer = Tokenizer()
         model = Sequential()
-        model.add(Embedding(self.DataManager.VocabSize+1, 32, input_length=self.DataManager.MaxLength))
+        model.add(Embedding(self.VocabSize, 64, input_length=self.MaxLength))
+        model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
+        model.add(Dropout(0.3))
+        model.add(MaxPooling1D(pool_size=3))
         model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu'))
+        model.add(Dropout(0.3))
         model.add(MaxPooling1D(pool_size=2))
-        model.add(LSTM(100))
-        model.add(Dense(1, activation='sigmoid'))
+        model.add(LSTM(128))
+        model.add(Flatten())
+        model.add(Dense(64,activation='relu'))
+        model.add(Dropout(0.3))
+        model.add(Dense(1,activation='sigmoid'))
         self.Model = model
         self.ModelSummary = model.summary()
         if PRINT:
             print(self.ModelSummary)
+
+    def encode_text(self, lines, length):
+        encoded = self.Tokenizer.texts_to_sequences(lines)
+        padded = pad_sequences(encoded, maxlen=length, padding='post')
+        return padded
+    def FitTokenizor(self,lines):
+        self.Tokenizer.fit_on_texts(lines)
+        self.MaxLength = max([len(s.split()) for s in lines])
+        self.VocabSize = len(self.Tokenizer.word_index) + 1
 
     def Compile(self):
         if self.Model is not None:
@@ -74,11 +117,28 @@ class CnnModel:
             self.IsCompiled = True
 
     def Train(self,trainX,trainY,testX,testY):
-        trainX = sequence.pad_sequences(trainX, maxlen=self.DataManager.MaxLength,dtype="int64")
-        testX = sequence.pad_sequences(testX, maxlen=self.DataManager.MaxLength,dtype="int64")
-        history = self.Model.fit(trainX, trainY, epochs=self.Epochs, batch_size=self.BatchSize)
-        # Final evaluation of the model
-        scores = self.Model.evaluate(testX, testY, verbose=0)
+        trainX_encoded = self.Tokenizer.Encode(trainX)
+        testX_encoded = self.Tokenizer.Encode(testX)
+        trainX_encoded = pad_sequences(trainX_encoded, maxlen=self.MaxLength,dtype="int64")
+        testX_encoded = pad_sequences(testX_encoded, maxlen=self.MaxLength,dtype="int64")
+        history = self.Model.fit(trainX_encoded, trainY, epochs=self.Epochs, batch_size=self.BatchSize)
+        self.SaveModel()
+        scores = self.Model.evaluate(testX_encoded, testY, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1]*100))
         return history
 
+    def SaveModel(self):
+        model_json = self.Model.to_json()
+        with open(self._modelJSONFile, "w") as json_file:
+            json_file.write(model_json)
+        with open(self._modelTokenizor,"r") as tokenizorFile:
+            json.dump(tokenizorFile,indent=2)
+        self.Model.save_weights(self._modelWeightsFile)
+
+    def LoadModel(self):
+        with open(self._modelJSONFile, 'r') as json_file:
+            loaded_model_json = json_file.read()
+        self.Model = model_from_json(loaded_model_json)
+        self.Model.load_weights(self._modelWeightsFile)
+        with open(self._modelTokenizor,'r') as tokensFile:
+            self.Tokenizer = tokensFile.load()
