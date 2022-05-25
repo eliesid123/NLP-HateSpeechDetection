@@ -1,7 +1,6 @@
 import string
 import os
 import speech_recognition as sr
-from torch import set_flush_denormal
 
 class SpeechManagerResponse:
     error = None

@@ -1,7 +1,10 @@
 import csv
+import json
+from re import S
 from nltk.corpus import stopwords 
 import emoji
 import numpy as np
+from transformers import RETRIBERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 
 class TrainingData():
 	"""data and tags used for trainig"""
@@ -9,26 +12,32 @@ class TrainingData():
 		super(TrainingData, self).__init__()
 		self.Data = data
 		self.Labels = tags
+		self.LabeledData = None
 		self._ini()
 
 	def _ini(self):
 		self.Size = len(self.Data)
 		self.MaxLength = 0
+		self.LabeledData = dict(zip(self.Data,self.Labels))
 		for line in self.Data:
 			self.MaxLength = max(self.MaxLength,len(line))
 	
 	def GetPair(self, i):
-		return self.Data[1], self.Labels[i]
+		return self.Data[i], self.Labels[i]
 
+	def Update(self):
+		self.LabeledData = dict(zip(self.Data,self.Labels))
+	
 class DataSetManager():
 	"""Reads and prepare raw data from csv files for training"""
-	def __init__(self, path,tokenizor,n=0.8,csvFile = None):
+	def __init__(self, path,cleanDataPath, tokenizor = None,dataSplit=0.8,csvFile = None):
 		super(DataSetManager, self).__init__()
 		self.CsvPath = path
-		self.TestSplit = n
+		self.CleanDataPath = cleanDataPath
+		self.TestSplit = dataSplit
 		self.CsvFile = csvFile
 		self.Tokenizor = tokenizor
-		self.VocabSize = self.Tokenizor.Index
+		self.TrainingData = None
 		self._init()
 
 	def _init(self):
@@ -58,8 +67,8 @@ class DataSetManager():
 					tags.append(0)
 
 		self.TrainingData = TrainingData(data,tags)
-		
-	def CleanData(self):
+
+	def CleanData(self,isSave = False):
 		iter = 0
 		for line in self.TrainingData.Data:
 			#remove valid symbols from sentences
@@ -71,11 +80,23 @@ class DataSetManager():
 				newWord = word.translate(self._unvalidSymbols)
 				newWord = emoji.demojize(newWord) 
 				#remove word if it is changed, 1 character, or is a stopword
-				if newWord != word or word == "URL" or len(word)<=1 or self._stopWords.count(word) >0:
+				if newWord != word or word == "URL" or len(word)<=1:# or self._stopWords.count(word) >0:
 					toRemove.append(word)
 			#reconstruct the sentence using only the useful words
 			self.TrainingData.Data[iter] = ' '.join([valid for valid in words if valid not in toRemove ])
 			iter = iter+1
+		if isSave:
+			self.SaveCleanData()
+
+	def SaveCleanData(self):
+		self.TrainingData.Update()
+		jsonData = json.dumps(self.TrainingData.LabeledData,indent=2)
+		with open(self.CleanDataPath, "w") as outfile:
+			outfile.write(jsonData)
+
+	def LoadCleanData(self):
+		with open(self.CleanDataPath, 'r') as openfile:
+			self.TrainingData.LabeledData = json.load(openfile)
 
 	#take a portion of data for training and leave the rest for testing
 	def GetTrainingData(self):
@@ -83,3 +104,6 @@ class DataSetManager():
 
 	def GetValidationData(self):
 		return self.TrainingData.Data[(int)(self.TestSplit*self.TrainingData.Size):], np.array(self.TrainingData.Labels[(int)(self.TestSplit*self.TrainingData.Size):])	
+
+	def GetAllData(self):
+		return self.TrainingData.Data, np.array(self.TrainingData.Labels)	
