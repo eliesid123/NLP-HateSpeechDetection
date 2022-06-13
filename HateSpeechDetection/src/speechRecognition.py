@@ -1,5 +1,7 @@
+from concurrent.futures import thread
 import string
 import os
+from sklearn.metrics import adjusted_mutual_info_score
 import speech_recognition as sr
 
 class SpeechManagerResponse:
@@ -8,16 +10,16 @@ class SpeechManagerResponse:
     text = string.whitespace
 
 class SpeechManager:
-    def __init__(self,mic=None) -> None:
+    def __init__(self,mic=None,adjustDuration = 1 ,pauseDuration = 1) -> None:
         self.Microphone = mic
-        self.AdjustNoiseDuration = 1
+        self.AdjustNoiseDuration = adjustDuration
         self.Recognizer = sr.Recognizer()
-        self.Recognizer.pause_threshold = 2
+        self.Recognizer.pause_threshold = pauseDuration
 
     def _speechToText(self,audioFile):
         response = SpeechManagerResponse()
         try:
-            response.text = self.Recognizer.recognize_google(audioFile,show_all=True)
+            response.text = self.Recognizer.recognize_google(audioFile, show_all=False)
             response.success = True
         except sr.UnknownValueError:
             response.error = "audio file unintelligible"
@@ -29,6 +31,8 @@ class SpeechManager:
             except:
                 response.error = "Couldn't detect speech"
                 response.success = False
+        # except Exception as ex:
+            # print(ex)
         finally:
             return response
 
@@ -41,7 +45,7 @@ class SpeechManager:
     def GetTextFromMic(self):
         with self.Microphone as mic:
             self.Recognizer.adjust_for_ambient_noise(mic, self.AdjustNoiseDuration)
-            print("waiting for audio")
+            # print("waiting for audio")
             audioFile = self.Recognizer.listen(mic)
             return self._speechToText(audioFile)
 
